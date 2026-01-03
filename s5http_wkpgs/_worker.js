@@ -1,28 +1,86 @@
 const pyip = ['[2a00:1098:2b::1:6815:5881]','pyip.ygkkk.dpdns.org']; 
 const token = '52135213';
 
-// --- 伪装网页 HTML 代码 ---
 const fakePage = `
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>站点搜索 - 引导页</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Dashboard</title>
     <style>
-        body { background: #f5f5f7; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .search-box { background: white; padding: 20px; border-radius: 50px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 80%; max-width: 500px; display: flex; }
-        input { border: none; outline: none; flex: 1; font-size: 16px; padding-left: 10px; }
-        button { background: #0071e3; color: white; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; }
-        .footer { margin-top: 20px; color: #86868b; font-size: 12px; }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            background-color: #f5f5f7; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #1d1d1f;
+        }
+        .container { 
+            text-align: center; 
+            animation: fadeIn 1.2s ease-out;
+        }
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 24px;
+            opacity: 0.8;
+        }
+        h1 { 
+            font-size: 24px; 
+            font-weight: 500; 
+            letter-spacing: -0.015em;
+            margin-bottom: 8px;
+        }
+        p { 
+            font-size: 17px; 
+            color: #86868b; 
+            font-weight: 400;
+        }
+        .dot-loader {
+            margin-top: 40px;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+        .dot {
+            width: 6px;
+            height: 6px;
+            background-color: #d2d2d7;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        .dot:nth-child(2) { animation-delay: 0.3s; }
+        .dot:nth-child(3) { animation-delay: 0.6s; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
-    <h2>资源搜索</h2>
-    <div class="search-box">
-        <input type="text" placeholder="输入关键词搜索...">
-        <button>搜索</button>
+    <div class="container">
+        <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="48" stroke="#d2d2d7" stroke-width="2"/>
+            <path d="M30 50L45 65L70 35" stroke="#d2d2d7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h1>系统连接已就绪</h1>
+        <p>正在同步云端配置，请稍后...</p>
+        <div class="dot-loader">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
     </div>
-    <div class="footer">© 2026 站点服务中心 - 资源索引中</div>
 </body>
 </html>
 `;
@@ -37,8 +95,7 @@ export default {
     try {
       const upgradeHeader = request.headers.get('Upgrade');
       
-      // 这里是原本判断显示“恭喜...”的地方
-      // 现在的逻辑：如果不是 WebSocket 请求，一律返回上面的伪装 HTML 内容
+      // 保持原有逻辑：普通访问返回苹果风格伪装页
       if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
         return new Response(fakePage, {
           status: 200,
@@ -46,7 +103,7 @@ export default {
         });
       }
 
-      // 核心代理逻辑开始（完全保留，未做改动）
+      // 代理逻辑（核心功能，绝对未改动）
       if (token && request.headers.get('Sec-WebSocket-Protocol') !== token) {
         return new Response('Unauthorized', { status: 401 });
       }
@@ -68,7 +125,7 @@ export default {
   },
 };
 
-// --- 以下所有 handleSession 及辅助函数均未做任何删改，与原代码完全一致 ---
+// --- 以下 handleSession 及辅助函数完全保留原样 ---
 async function handleSession(webSocket) {
   let remoteSocket, remoteWriter, remoteReader;
   let isClosed = false;
@@ -99,22 +156,14 @@ async function handleSession(webSocket) {
   const parseAddress = (addr) => {
     if (addr[0] === '[') {
       const end = addr.indexOf(']');
-      return {
-        host: addr.substring(1, end),
-        port: parseInt(addr.substring(end + 2), 10)
-      };
+      return { host: addr.substring(1, end), port: parseInt(addr.substring(end + 2), 10) };
     }
     const sep = addr.lastIndexOf(':');
-    return {
-      host: addr.substring(0, sep),
-      port: parseInt(addr.substring(sep + 1), 10)
-    };
+    return { host: addr.substring(0, sep), port: parseInt(addr.substring(sep + 1), 10) };
   };
   const isCFError = (err) => {
     const msg = err?.message?.toLowerCase() || '';
-    return msg.includes('proxy request') ||
-           msg.includes('cannot connect') ||
-           msg.includes('cloudflare');
+    return msg.includes('proxy request') || msg.includes('cannot connect') || msg.includes('cloudflare');
   };
   const parseClientPyip = (s) => {
     if (!s) return null;
@@ -131,16 +180,11 @@ async function handleSession(webSocket) {
     const attempts = [null, ...pyipList];
     for (let i = 0; i < attempts.length; i++) {
       try {
-        remoteSocket = connect({
-          hostname: attempts[i] || host,
-          port
-        });
+        remoteSocket = connect({ hostname: attempts[i] || host, port });
         if (remoteSocket.opened) await remoteSocket.opened;
         remoteWriter = remoteSocket.writable.getWriter();
         remoteReader = remoteSocket.readable.getReader();
-        if (firstFrameData) {
-          await remoteWriter.write(encoder.encode(firstFrameData));
-        }
+        if (firstFrameData) { await remoteWriter.write(encoder.encode(firstFrameData)); }
         webSocket.send('CONNECTED');
         pumpRemoteToWebSocket();
         return;
@@ -149,9 +193,7 @@ async function handleSession(webSocket) {
         try { remoteReader?.releaseLock(); } catch {}
         try { remoteSocket?.close(); } catch {}
         remoteWriter = remoteReader = remoteSocket = null;
-        if (!isCFError(err) || i === attempts.length - 1) {
-          throw err;
-        }
+        if (!isCFError(err) || i === attempts.length - 1) { throw err; }
       }
     }
   };
@@ -168,13 +210,9 @@ async function handleSession(webSocket) {
           await connectToRemote(targetAddr, firstFrameData, clientPyip);
         }
         else if (data.startsWith('DATA:')) {
-          if (remoteWriter) {
-            await remoteWriter.write(encoder.encode(data.substring(5)));
-          }
+          if (remoteWriter) { await remoteWriter.write(encoder.encode(data.substring(5))); }
         }
-        else if (data === 'CLOSE') {
-          cleanup();
-        }
+        else if (data === 'CLOSE') { cleanup(); }
       }
       else if (data instanceof ArrayBuffer && remoteWriter) {
         await remoteWriter.write(new Uint8Array(data));
@@ -190,8 +228,7 @@ async function handleSession(webSocket) {
 
 function safeCloseWebSocket(ws) {
   try {
-    if (ws.readyState === WS_READY_STATE_OPEN ||
-        ws.readyState === WS_READY_STATE_CLOSING) {
+    if (ws.readyState === WS_READY_STATE_OPEN || ws.readyState === WS_READY_STATE_CLOSING) {
       ws.close(1000, 'Server closed');
     }
   } catch {}
