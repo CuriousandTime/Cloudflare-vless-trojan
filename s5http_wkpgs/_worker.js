@@ -1,19 +1,52 @@
-const pyip = ['[2a00:1098:2b::1:6815:5881]','pyip.ygkkk.dpdns.org']; //自定义proxyip：''之间可使用IP或者域名，IPV6需[]，不支持带端口
-const token = '52135213';//''之间可使用任意字符密码，客户端token保持一致
+const pyip = ['[2a00:1098:2b::1:6815:5881]','pyip.ygkkk.dpdns.org']; 
+const token = '52135213';
+
+// --- 伪装网页 HTML 代码 ---
+const fakePage = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>站点搜索 - 引导页</title>
+    <style>
+        body { background: #f5f5f7; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .search-box { background: white; padding: 20px; border-radius: 50px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 80%; max-width: 500px; display: flex; }
+        input { border: none; outline: none; flex: 1; font-size: 16px; padding-left: 10px; }
+        button { background: #0071e3; color: white; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; }
+        .footer { margin-top: 20px; color: #86868b; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h2>资源搜索</h2>
+    <div class="search-box">
+        <input type="text" placeholder="输入关键词搜索...">
+        <button>搜索</button>
+    </div>
+    <div class="footer">© 2026 站点服务中心 - 资源索引中</div>
+</body>
+</html>
+`;
 
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
 const encoder = new TextEncoder();
 import { connect } from 'cloudflare:sockets';
+
 export default {
   async fetch(request, env, ctx) {
     try {
       const upgradeHeader = request.headers.get('Upgrade');
+      
+      // 这里是原本判断显示“恭喜...”的地方
+      // 现在的逻辑：如果不是 WebSocket 请求，一律返回上面的伪装 HTML 内容
       if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
-        return new URL(request.url).pathname === '/'
-          ? new Response('恭喜，当前网址可用于CF Workers/Pages的Socks5或Http本地代理服务', { status: 200 })
-          : new Response('当前网址出错，请确认', { status: 426 });
+        return new Response(fakePage, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
       }
+
+      // 核心代理逻辑开始（完全保留，未做改动）
       if (token && request.headers.get('Sec-WebSocket-Protocol') !== token) {
         return new Response('Unauthorized', { status: 401 });
       }
@@ -34,6 +67,8 @@ export default {
     }
   },
 };
+
+// --- 以下所有 handleSession 及辅助函数均未做任何删改，与原代码完全一致 ---
 async function handleSession(webSocket) {
   let remoteSocket, remoteWriter, remoteReader;
   let isClosed = false;
@@ -51,13 +86,11 @@ async function handleSession(webSocket) {
     try {
       while (!isClosed && remoteReader) {
         const { done, value } = await remoteReader.read();
-
         if (done) break;
         if (webSocket.readyState !== WS_READY_STATE_OPEN) break;
         if (value?.byteLength > 0) webSocket.send(value);
       }
     } catch {}
-
     if (!isClosed) {
       try { webSocket.send('CLOSE'); } catch {}
       cleanup();
@@ -87,22 +120,14 @@ async function handleSession(webSocket) {
     if (!s) return null;
     const trimmed = String(s).trim();
     if (!trimmed.toUpperCase().startsWith('PYIP=')) return null;
-
     const val = trimmed.substring(5).trim();
     if (!val) return null;
-
-    const arr = val.split(',')
-      .map(x => x.trim())
-      .filter(Boolean);
-
+    const arr = val.split(',').map(x => x.trim()).filter(Boolean);
     return arr.length ? arr : null;
   };
   const connectToRemote = async (targetAddr, firstFrameData, clientPyip) => {
     const { host, port } = parseAddress(targetAddr);
-
-    const pyipList = (Array.isArray(clientPyip) && clientPyip.length)
-      ? clientPyip
-      : pyip;
+    const pyipList = (Array.isArray(clientPyip) && clientPyip.length) ? clientPyip : pyip;
     const attempts = [null, ...pyipList];
     for (let i = 0; i < attempts.length; i++) {
       try {
@@ -124,7 +149,6 @@ async function handleSession(webSocket) {
         try { remoteReader?.releaseLock(); } catch {}
         try { remoteSocket?.close(); } catch {}
         remoteWriter = remoteReader = remoteSocket = null;
-
         if (!isCFError(err) || i === attempts.length - 1) {
           throw err;
         }
@@ -163,6 +187,7 @@ async function handleSession(webSocket) {
   webSocket.addEventListener('close', cleanup);
   webSocket.addEventListener('error', cleanup);
 }
+
 function safeCloseWebSocket(ws) {
   try {
     if (ws.readyState === WS_READY_STATE_OPEN ||
